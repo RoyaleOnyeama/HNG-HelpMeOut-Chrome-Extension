@@ -92,7 +92,7 @@ def start_recording(vid_id):
             chunks = request.stream.read(4096)
             if len(chunks) == 0:
                 break
-            videoFile.write(chunks)
+            video_file.write(chunks)
             
     return jsonify({"Message": "Blob data received and saved", "video": video.to_json()}), 200
 
