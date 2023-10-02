@@ -54,12 +54,12 @@ session = Session()
 
 @app.route('/')
 def status():
-    '''Status of the app'''
-    return jsonify({"message": "Up and running"})
+    '''Status'''
+    return jsonify({"message": "HelpMeOut Chrome Extension Up"})
 
+'''Create a New Screen Recording'''
 @app.route('/api/recording', methods=["POST"])
 def request_recording():
-    '''Initialize a New Screen Recording'''
     vid_id = str(uuid.uuid4())
     file_name = f'untitled_{datetime.now().strftime("%d_%m_%yT%H_%M_%S")}.mp4'
     file_path = str(video_directory / file_name)
@@ -69,9 +69,9 @@ def request_recording():
 
     return jsonify({"recording_id": vid_id}), 201
 
+'''Add Video Chunk to a Recording'''
 @app.route('/api/recording/<vid_id>', methods=["POST"])
 def start_recording(vid_id):
-    '''Add Video Chunk to a Recording'''
     video = session.query(Video).filter_by(id=vid_id).first()
     file_path = video.filePath
 
@@ -84,32 +84,33 @@ def start_recording(vid_id):
             
     return jsonify({"message": "Video chunk added successfully"}), 201
 
+
+'''Get Video of a Recording'''
 @app.route('/api/recording/<vid_id>', methods=["GET"])
 def get_recording(vid_id):
-    '''Get Video of a Recording'''
     video = session.query(Video).filter_by(id=vid_id).first()
     if not video:
         return jsonify({"error": "Recording not found"}), 404
 
     return send_file(video.filePath, as_attachment=True)
 
+'''Get All Recordings of a User'''
 @app.route('/api/recording/user/<user_id>', methods=["GET"])
 def get_user_recordings(user_id):
-    '''Get All Recordings of a User'''
     videos = session.query(Video).filter_by(user_id=user_id).all()
     recordings = [{'title': video.videoName, 'id': video.id, 'user_id': user_id, 'time': datetime.now().isoformat()} for video in videos]
     return jsonify(recordings), 200
 
+'''Get All Recordings'''
 @app.route('/api/recording', methods=["GET"])
 def get_all_recordings():
-    '''Get All Recordings'''
     videos = session.query(Video).all()
     recordings = [{'title': video.videoName, 'id': video.id, 'user_id': '', 'time': datetime.now().isoformat()} for video in videos]
     return jsonify(recordings), 200
 
+'''Update Recording Title'''
 @app.route('/api/recording/<vid_id>', methods=["PUT"])
 def update_recording_title(vid_id):
-    '''Update Recording Title'''
     video = session.query(Video).filter_by(id=vid_id).first()
     if not video:
         return jsonify({"error": "Recording not found"}), 404
@@ -120,9 +121,9 @@ def update_recording_title(vid_id):
     session.commit()
     return jsonify({"message": "Recording title updated successfully"}), 200
 
+'''Delete a Recording'''
 @app.route('/api/recording/<vid_id>', methods=["DELETE"])
 def delete_recording(vid_id):
-    '''Delete a Recording'''
     video = session.query(Video).filter_by(id=vid_id).first()
     if not video:
         return jsonify({"error": "Recording not found"}), 404
