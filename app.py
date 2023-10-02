@@ -67,27 +67,27 @@ def request_recording():
         returns the uuid to the client for further streaming
         the transcript at this time is None
     '''
-    vidID = str(uuid.uuid4())
-    filename = f'untitled_{datetime.now().strftime("%d_%m_%yT%H_%M_%S")}.mp4'
-    filepath = str(video_directory / filename)
-    new_video = Video(id=vidID, videoName=filename, filePath=filepath, transcript='')
+    vid_id = str(uuid.uuid4())
+    file_name = f'untitled_{datetime.now().strftime("%d_%m_%yT%H_%M_%S")}.mp4'
+    file_path = str(video_directory / file_name)
+    new_video = Video(id=vid_id, video_name=file_name, file_path=file_path, transcript='')
     session.add(new_video)
     session.commit()
 
     return jsonify({"Message": "This is the video details", "video": new_video.to_json()})
 
 @app.route('/upload/<vidID>', methods=["POST"])
-def start_recording(vidID):
+def start_recording(vid_id):
     '''This is the second part
         Receives chunks of blob data from client
         Writes this data to the file that was created in part one above
         The filepath is gotten by using the videoID sent in the part one above
         Once all data has been written, returns a success message
     '''
-    video = session.query(Video).filter_by(id=vidID).first()
-    filepath = video.filePath
+    video = session.query(Video).filter_by(id=vid_id).first()
+    file_path = video.file_path
 
-    with open(str(filepath), 'ab') as videoFile:
+    with open(str(file_path), 'ab') as video_file:
         while True:
             chunks = request.stream.read(4096)
             if len(chunks) == 0:
@@ -97,18 +97,18 @@ def start_recording(vidID):
     return jsonify({"Message": "Blob data received and saved", "video": video.to_json()}), 200
 
 @app.route('/done_recording/<vidID>')
-def stop_recording(vidID):
+def stop_recording(vid_id):
     '''This is the third step
         Processes the video already gotten
         The file path is gotten which already contains the blob datas.
         Sub prpcess is used to transcribe it and the transcription is saved
         to video.transcript
     '''
-    video = session.query(Video).filter_by(id=vidID).first()
-    videoFile = video.filePath
+    video = session.query(Video).filter_by(id=vid_id).first()
+    video_file = video.file_path
 
     # Use subprocess to convert the video file to audio
-    transcript = subprocess(run_transcription(videoFile))
+    transcript = subprocess(run_transcription(video_file))
     
     # Error handlers
     if len(transcript) == 0:
