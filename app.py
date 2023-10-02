@@ -1,5 +1,5 @@
-from flask import Flask, jsonify, request
-from sqlalchemy import create_engine, Column, Integer, String
+from flask import Flask, jsonify, request, send_file
+from sqlalchemy import create_engine, Column, String
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from pathlib import Path
@@ -41,9 +41,8 @@ class Video(Base):
     def to_json(self):
         return {
             "id": self.id,
-            "filepath": self.filePath,
             "videoName": self.videoName,
-            "Transcript": self.transcript
+            "transcript": self.transcript
         }
 
 # Create the "videos" table in the database
@@ -58,34 +57,23 @@ def status():
     '''Status of the app'''
     return jsonify({"message": "Up and running"})
 
-@app.route('/start')
+@app.route('/api/recording', methods=["POST"])
 def request_recording():
-    '''This is the first step
-        creates a blank mp4 file in storage
-        assigns a name to it which is the current time
-        assigns a uuid to it
-        returns the uuid to the client for further streaming
-        the transcript at this time is None
-    '''
+    '''Initialize a New Screen Recording'''
     vid_id = str(uuid.uuid4())
     file_name = f'untitled_{datetime.now().strftime("%d_%m_%yT%H_%M_%S")}.mp4'
     file_path = str(video_directory / file_name)
-    new_video = Video(id=vid_id, video_name=file_name, file_path=file_path, transcript='')
+    new_video = Video(id=vid_id, videoName=file_name, filePath=file_path, transcript='')
     session.add(new_video)
     session.commit()
 
-    return jsonify({"Message": "This is the video details", "video": new_video.to_json()})
+    return jsonify({"recording_id": vid_id}), 201
 
-@app.route('/upload/<vidID>', methods=["POST"])
+@app.route('/api/recording/<vid_id>', methods=["POST"])
 def start_recording(vid_id):
-    '''This is the second part
-        Receives chunks of blob data from client
-        Writes this data to the file that was created in part one above
-        The filepath is gotten by using the videoID sent in the part one above
-        Once all data has been written, returns a success message
-    '''
+    '''Add Video Chunk to a Recording'''
     video = session.query(Video).filter_by(id=vid_id).first()
-    file_path = video.file_path
+    file_path = video.filePath
 
     with open(str(file_path), 'ab') as video_file:
         while True:
@@ -94,35 +82,54 @@ def start_recording(vid_id):
                 break
             video_file.write(chunks)
             
-    return jsonify({"Message": "Blob data received and saved", "video": video.to_json()}), 200
+    return jsonify({"message": "Video chunk added successfully"}), 201
 
-@app.route('/done_recording/<vidID>')
-def stop_recording(vid_id):
-    '''This is the third step
-        Processes the video already gotten
-        The file path is gotten which already contains the blob datas.
-        Sub prpcess is used to transcribe it and the transcription is saved
-        to video.transcript
-    '''
+@app.route('/api/recording/<vid_id>', methods=["GET"])
+def get_recording(vid_id):
+    '''Get Video of a Recording'''
     video = session.query(Video).filter_by(id=vid_id).first()
-    video_file = video.file_path
+    if not video:
+        return jsonify({"error": "Recording not found"}), 404
 
-    # Use subprocess to convert the video file to audio
-    transcript = subprocess(run_transcription(video_file))
-    
-    # Error handlers
-    if len(transcript) == 0:
-        return jsonify("Unable to transcribe video"), 500
-    video.transcript = transcript
-    # Return the full video
-    return jsonify({"Video": video.to_json()})
+    return send_file(video.filePath, as_attachment=True)
 
-@app.route('/all')
-def all_videos():
-    '''Returns the path of all videos'''
+@app.route('/api/recording/user/<user_id>', methods=["GET"])
+def get_user_recordings(user_id):
+    '''Get All Recordings of a User'''
+    videos = session.query(Video).filter_by(user_id=user_id).all()
+    recordings = [{'title': video.videoName, 'id': video.id, 'user_id': user_id, 'time': datetime.now().isoformat()} for video in videos]
+    return jsonify(recordings), 200
+
+@app.route('/api/recording', methods=["GET"])
+def get_all_recordings():
+    '''Get All Recordings'''
     videos = session.query(Video).all()
-    vid = [{'videos': video.to_json()} for video in videos]
-    return jsonify(vid)
+    recordings = [{'title': video.videoName, 'id': video.id, 'user_id': '', 'time': datetime.now().isoformat()} for video in videos]
+    return jsonify(recordings), 200
+
+@app.route('/api/recording/<vid_id>', methods=["PUT"])
+def update_recording_title(vid_id):
+    '''Update Recording Title'''
+    video = session.query(Video).filter_by(id=vid_id).first()
+    if not video:
+        return jsonify({"error": "Recording not found"}), 404
+
+    data = request.json
+    new_title = data.get("title", "")
+    video.videoName = new_title
+    session.commit()
+    return jsonify({"message": "Recording title updated successfully"}), 200
+
+@app.route('/api/recording/<vid_id>', methods=["DELETE"])
+def delete_recording(vid_id):
+    '''Delete a Recording'''
+    video = session.query(Video).filter_by(id=vid_id).first()
+    if not video:
+        return jsonify({"error": "Recording not found"}), 404
+
+    session.delete(video)
+    session.commit()
+    return jsonify({"message": "Recording deleted successfully"}), 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
